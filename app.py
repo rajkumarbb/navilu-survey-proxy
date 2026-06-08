@@ -30,7 +30,7 @@ def index():
 def ping():
     return ok({'status': 'ok'})
 
-@app.route('/auth/signIn', methods=['GET','POST','OPTIONS'])
+@app.route('/bh/login', methods=['GET','POST','OPTIONS'])
 def auth():
     if request.method == 'OPTIONS':
         return ok({})
