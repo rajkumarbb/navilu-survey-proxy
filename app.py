@@ -1,17 +1,12 @@
 import os
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, make_response
 from flask_cors import CORS
 import requests
 
 app = Flask(__name__)
 
-# Allow requests from your GoDaddy site
-CORS(app, origins=[
-    "http://survey.navilu.in",
-    "https://survey.navilu.in",
-    "http://navilu.in",
-    "https://navilu.in"
-])
+# Permissive CORS — allow all origins
+CORS(app, resources={r"/*": {"origins": "*"}})
 
 BHOONIDHI_BASE = 'https://bhoonidhi.nrsc.gov.in/bhoonidhi/api'
 
@@ -23,18 +18,29 @@ BHOONIDHI_HEADERS = {
     'Referer': 'https://bhoonidhi.nrsc.gov.in/'
 }
 
+def cors_response(data, status=200):
+    resp = make_response(jsonify(data), status)
+    resp.headers['Access-Control-Allow-Origin'] = '*'
+    resp.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
+    resp.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
+    return resp
+
 @app.route('/')
 def index():
-    return jsonify({'status': 'Navilu Survey Proxy running', 'version': '1.0'})
+    return cors_response({'status': 'Navilu Survey Proxy', 'version': '1.0'})
 
-@app.route('/ping')
+@app.route('/ping', methods=['GET', 'OPTIONS'])
 def ping():
-    return jsonify({'status': 'ok', 'proxy': 'navilu-survey-proxy', 'bhoonidhi': BHOONIDHI_BASE})
+    return cors_response({'status': 'ok', 'proxy': 'navilu-survey-proxy'})
 
-@app.route('/auth/signIn', methods=['POST', 'OPTIONS'])
+@app.route('/auth/signIn', methods=['POST', 'GET', 'OPTIONS'])
 def auth():
     if request.method == 'OPTIONS':
-        return '', 200
+        resp = make_response('', 200)
+        resp.headers['Access-Control-Allow-Origin'] = '*'
+        resp.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
+        resp.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
+        return resp
     try:
         payload = request.get_json(silent=True) or {}
         r = requests.post(
@@ -44,22 +50,22 @@ def auth():
             timeout=30
         )
         try:
-            return jsonify(r.json()), r.status_code
+            return cors_response(r.json(), r.status_code)
         except Exception:
-            return jsonify({
-                'error': 'Bhoonidhi returned unexpected response',
-                'code': r.status_code,
-                'body': r.text[:500]
-            }), r.status_code
+            return cors_response({'error': r.text[:500], 'code': r.status_code}, r.status_code)
     except requests.exceptions.Timeout:
-        return jsonify({'error': 'Bhoonidhi timed out. Try again.'}), 504
+        return cors_response({'error': 'Bhoonidhi timed out'}, 504)
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return cors_response({'error': str(e)}, 500)
 
 @app.route('/stac/search', methods=['POST', 'OPTIONS'])
 def stac_search():
     if request.method == 'OPTIONS':
-        return '', 200
+        resp = make_response('', 200)
+        resp.headers['Access-Control-Allow-Origin'] = '*'
+        resp.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
+        resp.headers['Access-Control-Allow-Methods'] = 'POST, OPTIONS'
+        return resp
     try:
         payload = request.get_json(silent=True) or {}
         token = request.headers.get('Authorization', '')
@@ -73,22 +79,22 @@ def stac_search():
             timeout=60
         )
         try:
-            return jsonify(r.json()), r.status_code
+            return cors_response(r.json(), r.status_code)
         except Exception:
-            return jsonify({
-                'error': 'Bhoonidhi returned unexpected response',
-                'code': r.status_code,
-                'body': r.text[:500]
-            }), r.status_code
+            return cors_response({'error': r.text[:500], 'code': r.status_code}, r.status_code)
     except requests.exceptions.Timeout:
-        return jsonify({'error': 'Search timed out. Reduce date range.'}), 504
+        return cors_response({'error': 'Search timed out'}, 504)
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return cors_response({'error': str(e)}, 500)
 
 @app.route('/download/<product_id>', methods=['GET', 'OPTIONS'])
 def download(product_id):
     if request.method == 'OPTIONS':
-        return '', 200
+        resp = make_response('', 200)
+        resp.headers['Access-Control-Allow-Origin'] = '*'
+        resp.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
+        resp.headers['Access-Control-Allow-Methods'] = 'GET, OPTIONS'
+        return resp
     try:
         token = request.headers.get('Authorization', '')
         headers = dict(BHOONIDHI_HEADERS)
@@ -100,13 +106,13 @@ def download(product_id):
             timeout=60
         )
         try:
-            return jsonify(r.json()), r.status_code
+            return cors_response(r.json(), r.status_code)
         except Exception:
-            return jsonify({'error': r.text[:500]}), r.status_code
+            return cors_response({'error': r.text[:500]}, r.status_code)
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return cors_response({'error': str(e)}, 500)
 
-# Gunicorn entry point
+# Gunicorn/WSGI entry point
 application = app
 
 if __name__ == '__main__':
